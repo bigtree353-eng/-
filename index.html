@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>おやすみ / おはよう</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0e1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="おやすみ">
+<!-- iOS用アイコン（SVGインライン生成） -->
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&family=Zen+Kaku+Gothic+New:wght@300;400&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --nb1:#0a0e1a;--nb2:#1a1f3a;--nb3:#0d1b2a;
+  --star:#c8d8f0;--text:#dde8f8;--soft:#8899bb;
+  --acc:#4a6fa5;--acc2:#6a9fd8;
+  --db1:#1a0a00;--db2:#7a3010;--db3:#e8640a;
+  --sun:#ffd060;--wake:#ff8c30;
+  --card:rgba(255,255,255,0.05);--border:rgba(255,255,255,0.09);
+}
+
+body{
+  font-family:'Zen Kaku Gothic New','Noto Sans JP',sans-serif;
+  font-weight:300;min-height:100vh;
+  background:radial-gradient(ellipse at 30% 20%,var(--nb2),var(--nb1) 60%,var(--nb3));
+  color:var(--text);display:flex;flex-direction:column;
+  align-items:center;padding:20px 16px 60px;
+  transition:background 2.5s ease;overflow-x:hidden;
+}
+body.dawn{background:radial-gradient(ellipse at 50% 85%,var(--db3),var(--db2) 40%,var(--db1));}
+
+.stars{position:fixed;inset:0;pointer-events:none;z-index:0;transition:opacity 2.5s}
+body.dawn .stars{opacity:0}
+.star{position:absolute;background:var(--star);border-radius:50%;
+  animation:twinkle var(--d,3s) ease-in-out infinite var(--dl,0s)}
+@keyframes twinkle{0%,100%{opacity:.25;transform:scale(1)}50%{opacity:1;transform:scale(1.5)}}
+
+.wrap{position:relative;z-index:1;width:100%;max-width:440px;
+  display:flex;flex-direction:column;align-items:center;gap:22px}
+
+/* Header */
+.app-title{font-size:11px;letter-spacing:.35em;color:var(--soft);text-transform:uppercase;margin-top:4px}
+
+/* Moon/Sun */
+.sky{position:relative;width:150px;height:150px;display:flex;align-items:center;justify-content:center}
+.ring{position:absolute;border-radius:50%;border:1px solid rgba(200,216,240,.1);
+  animation:rpulse 5s ease-in-out infinite}
+.r1{width:120px;height:120px;animation-delay:0s}
+.r2{width:142px;height:142px;animation-delay:.6s}
+.r3{width:162px;height:162px;animation-delay:1.2s}
+@keyframes rpulse{0%,100%{opacity:.15;transform:scale(1)}50%{opacity:.45;transform:scale(1.04)}}
+.moon{width:84px;height:84px;border-radius:50%;
+  background:radial-gradient(circle at 33% 33%,#f8f0e0,#c8b890 60%,#a09070);
+  box-shadow:0 0 28px rgba(232,220,200,.28),0 0 56px rgba(232,220,200,.1);
+  animation:breathe 5s ease-in-out infinite;
+  transition:background 2s,box-shadow 2s;position:relative;overflow:hidden}
+.moon::before{content:'';position:absolute;width:18px;height:18px;border-radius:50%;
+  background:rgba(0,0,0,.08);top:18px;left:16px}
+.moon::after{content:'';position:absolute;width:9px;height:9px;border-radius:50%;
+  background:rgba(0,0,0,.06);top:44px;left:46px}
+body.dawn .moon{
+  background:radial-gradient(circle at 38% 38%,#fff8b0,#ffd060 48%,#ff8c30);
+  box-shadow:0 0 40px rgba(255,208,96,.6),0 0 80px rgba(255,140,48,.28)}
+body.dawn .moon::before,body.dawn .moon::after{display:none}
+@keyframes breathe{
+  0%,100%{transform:scale(1)}
+  50%{transform:scale(1.07)}}
+
+.breath-hint{font-size:11px;color:var(--soft);letter-spacing:.18em;height:16px;transition:opacity .5s}
+.breath-hint.hide{opacity:0}
+
+/* Clock */
+.clock{text-align:center}
+.clock-time{font-size:50px;font-weight:300;letter-spacing:.06em;font-variant-numeric:tabular-nums;line-height:1}
+.clock-date{font-size:12px;color:var(--soft);margin-top:5px;letter-spacing:.12em}
+
+/* Tabs */
+.tabs{display:flex;background:rgba(255,255,255,.06);border-radius:12px;padding:3px;width:100%}
+.tab{flex:1;padding:9px;text-align:center;font-size:13px;letter-spacing:.1em;border-radius:9px;
+  cursor:pointer;transition:background .3s,color .3s;color:var(--soft);
+  border:none;background:none;font-family:inherit;font-weight:300}
+.tab.on{background:rgba(74,111,165,.5);color:var(--text)}
+body.dawn .tab.on{background:rgba(255,140,48,.4)}
+
+/* Panel */
+.panel{width:100%;display:flex;flex-direction:column;gap:14px}
+
+/* Card */
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px}
+.clabel{font-size:10px;letter-spacing:.28em;color:var(--soft);text-transform:uppercase;margin-bottom:12px}
+
+/* Sound type tabs (inside card) */
+.stype-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.stype-tab{padding:5px 12px;border-radius:20px;border:1px solid var(--border);
+  background:rgba(255,255,255,.04);color:var(--soft);font-family:inherit;
+  font-size:11px;cursor:pointer;transition:all .2s;letter-spacing:.08em}
+.stype-tab.on{border-color:var(--acc2);background:rgba(74,111,165,.3);color:var(--text)}
+
+/* Sound grid */
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.sbtn{padding:9px 7px;border-radius:10px;border:1px solid var(--border);
+  background:rgba(255,255,255,.04);color:var(--text);font-family:inherit;
+  font-size:11px;cursor:pointer;transition:all .2s;
+  display:flex;align-items:center;gap:5px;font-weight:300}
+.sbtn:hover{background:rgba(255,255,255,.1)}
+.sbtn.on{border-color:var(--acc);background:rgba(74,111,165,.25)}
+body.dawn .sbtn.on{border-color:var(--wake);background:rgba(255,140,48,.2)}
+.sico{font-size:16px}
+
+/* Music info */
+.music-info{font-size:11px;color:var(--soft);margin-top:10px;line-height:1.7;letter-spacing:.04em;
+  border-top:1px solid var(--border);padding-top:10px}
+
+/* Volume */
+.vrow{display:flex;align-items:center;gap:10px}
+.vico{font-size:16px}
+input[type=range]{flex:1;-webkit-appearance:none;height:3px;border-radius:2px;
+  background:rgba(255,255,255,.15);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;
+  border-radius:50%;background:var(--acc);cursor:pointer;transition:background .3s}
+body.dawn input[type=range]::-webkit-slider-thumb{background:var(--wake)}
+
+/* Timer */
+.trow{display:flex;align-items:center;gap:8px;justify-content:center}
+.tfield{background:rgba(255,255,255,.08);border:1px solid var(--border);border-radius:10px;
+  color:var(--text);font-family:inherit;font-size:26px;font-weight:300;
+  text-align:center;width:68px;padding:7px 4px;outline:none;font-variant-numeric:tabular-nums}
+.tfield:focus{border-color:var(--acc)}
+.tsep{font-size:20px;color:var(--soft)}
+
+/* Countdown */
+.cdown{display:none;flex-direction:column;align-items:center;gap:4px}
+.cdown.show{display:flex}
+.cdown-num{font-size:34px;font-weight:300;font-variant-numeric:tabular-nums;color:var(--acc2);transition:color .5s}
+body.dawn .cdown-num{color:var(--wake)}
+.cdown-sub{font-size:10px;color:var(--soft);letter-spacing:.2em}
+
+/* Alarm list */
+.alarm-list{display:flex;flex-direction:column;gap:8px}
+.alarm-item{display:flex;align-items:center;gap:10px;
+  background:rgba(255,255,255,.04);border:1px solid var(--border);
+  border-radius:12px;padding:12px 14px;transition:border-color .2s}
+.alarm-item.active-alarm{border-color:rgba(255,140,48,.4)}
+.alarm-time-txt{font-size:26px;font-weight:300;font-variant-numeric:tabular-nums;flex:1}
+.alarm-label-txt{font-size:11px;color:var(--soft);flex:1}
+.alarm-toggle{position:relative;width:40px;height:22px;flex-shrink:0}
+.alarm-toggle input{opacity:0;width:0;height:0}
+.atslider{position:absolute;inset:0;background:rgba(255,255,255,.15);
+  border-radius:11px;cursor:pointer;transition:.3s}
+.atslider::before{content:'';position:absolute;width:16px;height:16px;
+  border-radius:50%;background:#fff;left:3px;top:3px;transition:.3s}
+.alarm-toggle input:checked+.atslider{background:var(--wake)}
+.alarm-toggle input:checked+.atslider::before{transform:translateX(18px)}
+.alarm-del{background:none;border:none;color:var(--soft);font-size:18px;cursor:pointer;
+  padding:4px;border-radius:6px;transition:color .2s;line-height:1}
+.alarm-del:hover{color:#ff6060}
+
+/* Add alarm row */
+.add-alarm-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ainput{background:rgba(255,255,255,.08);border:1px solid var(--border);border-radius:10px;
+  color:var(--text);font-family:inherit;font-size:18px;font-weight:300;
+  text-align:center;padding:8px 10px;outline:none;flex:1;min-width:130px}
+.ainput:focus{border-color:var(--wake)}
+.alabel-input{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:10px;
+  color:var(--text);font-family:inherit;font-size:12px;
+  padding:8px 10px;outline:none;flex:2;min-width:100px}
+.alabel-input::placeholder{color:var(--soft)}
+.alabel-input:focus{border-color:var(--wake)}
+.btn-add{padding:8px 14px;border-radius:10px;border:1px solid rgba(255,140,48,.4);
+  background:rgba(255,140,48,.1);color:var(--wake);font-family:inherit;font-size:13px;
+  cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-add:hover{background:rgba(255,140,48,.25)}
+
+/* Next alarm display */
+.next-alarm{text-align:center;padding:10px;background:rgba(255,140,48,.07);
+  border:1px solid rgba(255,140,48,.2);border-radius:12px}
+.next-alarm-time{font-size:22px;font-weight:300;font-variant-numeric:tabular-nums;color:var(--sun)}
+.next-alarm-sub{font-size:10px;color:var(--soft);letter-spacing:.15em;margin-top:2px}
+
+/* Primary button */
+.btn-main{width:100%;padding:15px;border-radius:14px;border:none;font-family:inherit;
+  font-size:14px;font-weight:400;letter-spacing:.15em;cursor:pointer;transition:all .3s;
+  background:linear-gradient(135deg,#2a4a7f,var(--acc));color:#dde8f8}
+.btn-main:hover{opacity:.85;transform:translateY(-1px)}
+.btn-main.stop{background:linear-gradient(135deg,#6b2010,#b03010)}
+body.dawn .btn-main{background:linear-gradient(135deg,#a04010,var(--wake))}
+
+/* Status */
+.status{text-align:center;font-size:12px;color:var(--soft);letter-spacing:.1em;min-height:18px}
+.status.glow{color:var(--sun);animation:blink .9s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Alarm overlay */
+.overlay{display:none;position:fixed;inset:0;background:rgba(255,100,10,.12);z-index:100;
+  flex-direction:column;align-items:center;justify-content:center;gap:20px;
+  backdrop-filter:blur(6px)}
+.overlay.show{display:flex}
+.overlay-msg{font-size:24px;letter-spacing:.1em;text-align:center;
+  animation:blink .8s ease-in-out infinite;color:var(--sun)}
+.btn-stop{padding:16px 44px;border-radius:50px;border:2px solid var(--sun);
+  background:rgba(255,208,96,.1);color:var(--sun);font-family:inherit;
+  font-size:16px;letter-spacing:.2em;cursor:pointer;transition:all .2s}
+.btn-stop:hover{background:rgba(255,208,96,.3)}
+.ringing-name{font-size:13px;color:var(--soft);letter-spacing:.1em}
+
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="stars" id="stars"></div>
+
+<!-- Alarm overlay -->
+<div class="overlay" id="overlay">
+  <div style="font-size:60px">🌅</div>
+  <div class="overlay-msg" id="overlayMsg">おはようございます</div>
+  <div class="ringing-name" id="overlayLabel"></div>
+  <button class="btn-stop" onclick="stopAlarm()">止める</button>
+</div>
+
+<div class="wrap">
+  <div class="app-title">sleep · wake</div>
+
+  <div class="sky">
+    <div class="ring r3"></div><div class="ring r2"></div><div class="ring r1"></div>
+    <div class="moon"></div>
+  </div>
+
+  <div class="breath-hint" id="bHint">息を吸って… ゆっくり吐いて…</div>
+
+  <div class="clock">
+    <div class="clock-time" id="cTime">--:--</div>
+    <div class="clock-date" id="cDate"></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" onclick="switchTab('sleep',this)">🌙 入眠</button>
+    <button class="tab" onclick="switchTab('wake',this)">☀️ 起床</button>
+  </div>
+
+  <!-- ===== SLEEP PANEL ===== -->
+  <div class="panel" id="pSleep">
+
+    <!-- Sound type switcher -->
+    <div class="card">
+      <div class="clabel">サウンドカテゴリ</div>
+      <div class="stype-tabs">
+        <button class="stype-tab on" onclick="setSoundCat('nature',this)">自然音</button>
+        <button class="stype-tab" onclick="setSoundCat('music',this)">睡眠音楽</button>
+      </div>
+
+      <!-- Nature sounds -->
+      <div id="natGrid" class="sgrid">
+        <button class="sbtn on" onclick="selectSleep('rain',this)"><span class="sico">🌧️</span>雨音</button>
+        <button class="sbtn" onclick="selectSleep('ocean',this)"><span class="sico">🌊</span>波音</button>
+        <button class="sbtn" onclick="selectSleep('forest',this)"><span class="sico">🌿</span>森の音</button>
+        <button class="sbtn" onclick="selectSleep('white',this)"><span class="sico">🌫️</span>ホワイトノイズ</button>
+        <button class="sbtn" onclick="selectSleep('river',this)"><span class="sico">💧</span>せせらぎ</button>
+        <button class="sbtn" onclick="selectSleep('wind',this)"><span class="sico">🍃</span>そよ風</button>
+      </div>
+
+      <!-- Music sounds -->
+      <div id="musGrid" class="sgrid" style="display:none">
+        <button class="sbtn" onclick="selectSleep('delta',this)"><span class="sico">🧠</span>デルタ波</button>
+        <button class="sbtn" onclick="selectSleep('binaural',this)"><span class="sico">〰️</span>バイノーラル</button>
+        <button class="sbtn" onclick="selectSleep('hz432',this)"><span class="sico">✨</span>432Hz癒し</button>
+        <button class="sbtn" onclick="selectSleep('lullaby',this)"><span class="sico">🎵</span>子守唄風</button>
+        <button class="sbtn" onclick="selectSleep('crystal',this)"><span class="sico">🔮</span>クリスタル</button>
+        <button class="sbtn" onclick="selectSleep('zen',this)"><span class="sico">☯️</span>禅の音</button>
+      </div>
+
+      <div class="music-info" id="musicInfo" style="display:none"></div>
+    </div>
+
+    <!-- Volume -->
+    <div class="card">
+      <div class="clabel">音量</div>
+      <div class="vrow">
+        <span class="vico">🔈</span>
+        <input type="range" min="0" max="100" value="45" id="volSlider" oninput="setVol(this.value)">
+        <span class="vico">🔊</span>
+      </div>
+    </div>
+
+    <!-- Stop timer -->
+    <div class="card">
+      <div class="clabel">停止タイマー（眠ったら音を止める）</div>
+      <div class="trow">
+        <input type="number" class="tfield" id="tMin" value="30" min="1" max="180">
+        <span class="tsep">分後に停止</span>
+      </div>
+    </div>
+
+    <div class="cdown" id="cdown">
+      <div class="cdown-num" id="cdownNum">--:--</div>
+      <div class="cdown-sub">音が止まるまで</div>
+    </div>
+
+    <button class="btn-main" id="sleepBtn" onclick="toggleSleep()">再生して眠る</button>
+  </div>
+
+  <!-- ===== WAKE PANEL ===== -->
+  <div class="panel" id="pWake" style="display:none">
+
+    <!-- Add alarm -->
+    <div class="card">
+      <div class="clabel">アラームを追加</div>
+      <div class="add-alarm-row">
+        <input type="time" class="ainput" id="newAlarmTime" value="07:00">
+        <input type="text" class="alabel-input" id="newAlarmLabel" placeholder="メモ（任意）" maxlength="20">
+        <button class="btn-add" onclick="addAlarm()">＋ 追加</button>
+      </div>
+    </div>
+
+    <!-- Wake sound -->
+    <div class="card">
+      <div class="clabel">起床音</div>
+      <div class="sgrid">
+        <button class="sbtn on" onclick="selectWake('birds',this)"><span class="sico">🐦</span>小鳥</button>
+        <button class="sbtn" onclick="selectWake('chime',this)"><span class="sico">🔔</span>チャイム</button>
+        <button class="sbtn" onclick="selectWake('bell',this)"><span class="sico">🎵</span>ベル</button>
+        <button class="sbtn" onclick="selectWake('energize',this)"><span class="sico">⚡</span>元気な音</button>
+      </div>
+    </div>
+
+    <!-- Alarm list -->
+    <div class="card">
+      <div class="clabel">セット中のアラーム</div>
+      <div class="alarm-list" id="alarmList">
+        <div style="font-size:12px;color:var(--soft);text-align:center;padding:8px">
+          アラームがありません
+        </div>
+      </div>
+    </div>
+
+    <!-- Next alarm countdown -->
+    <div class="next-alarm" id="nextAlarmBox" style="display:none">
+      <div class="next-alarm-sub">次のアラームまで</div>
+      <div class="next-alarm-time" id="nextAlarmCount">--:--:--</div>
+      <div class="next-alarm-sub" id="nextAlarmName"></div>
+    </div>
+
+  </div>
+
+  <div class="status" id="status">静かな夜 — さあ、眠りましょう</div>
+</div>
+
+<script>
+/* ===================================================
+   STATE
+=================================================== */
+let ctx = null;
+let sleepNodes = [], isSleeping = false;
+let sleepSession = 0; // セッションID — 停止判定に使用（setTimeout競合を防ぐ）
+let sleepTimer = null, sleepRemaining = 0, cdownInt = null;
+let selectedSleep = 'rain', selectedWake = 'birds', vol = 0.45;
+let soundCat = 'nature';
+let alarms = []; // {id, time, label, enabled}
+let alarmCheckInt = null, alarmPlaying = false, alarmNodes = [];
+let currentTab = 'sleep';
+
+/* ===================================================
+   AUDIO CONTEXT
+=================================================== */
+function AC(){ if(!ctx) ctx=new(window.AudioContext||window.webkitAudioContext)(); return ctx; }
+document.addEventListener('click',()=>{ if(ctx&&ctx.state==='suspended') ctx.resume(); });
+
+/* ===================================================
+   STARS
+=================================================== */
+(function(){
+  const c=document.getElementById('stars');
+  for(let i=0;i<90;i++){
+    const s=document.createElement('div'); s.className='star';
+    const sz=Math.random()*2.5+.5;
+    s.style.cssText=`width:${sz}px;height:${sz}px;top:${Math.random()*100}%;left:${Math.random()*100}%;--d:${2+Math.random()*4}s;--dl:${Math.random()*4}s`;
+    c.appendChild(s);
+  }
+})();
+
+/* ===================================================
+   CLOCK
+=================================================== */
+function tick(){
+  const n=new Date();
+  document.getElementById('cTime').textContent=n.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('cDate').textContent=n.toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric',weekday:'short'});
+  if(alarms.some(a=>a.enabled)) updateNextAlarm();
+  checkAlarms(n);
+}
+setInterval(tick,1000); tick();
+
+/* ===================================================
+   TAB
+=================================================== */
+function switchTab(tab,el){
+  currentTab=tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('pSleep').style.display=tab==='sleep'?'flex':'none';
+  document.getElementById('pWake').style.display=tab==='wake'?'flex':'none';
+  document.getElementById('bHint').classList.toggle('hide',tab==='wake');
+  if(tab==='wake') document.body.classList.add('dawn');
+  else if(!isSleeping) document.body.classList.remove('dawn');
+}
+
+/* ===================================================
+   SOUND CATEGORY
+=================================================== */
+const MUSIC_DESC={
+  delta:'デルタ波（0.5–2 Hz）のバイノーラルビートで深いノンレム睡眠を誘導します。ヘッドフォン推奨。',
+  binaural:'左右の耳に微妙に異なる周波数を流し、脳波をシータ波（4–8 Hz）に同調させる睡眠音楽です。',
+  hz432:'432Hzは細胞共鳴・自律神経の安定に効果があるとされる周波数。アンビエントパッドが奏でます。',
+  lullaby:'ゆったりとしたメロディラインが入眠を促す子守唄風のアンビエント音楽です。',
+  crystal:'クリスタルボウルの倍音で空間を満たし、思考を手放して眠りへ誘います。',
+  zen:'ティンシャとシンギングボウルの余韻が意識をやわらかく溶かす禅の音空間です。',
+};
+
+function setSoundCat(cat,el){
+  soundCat=cat;
+  document.querySelectorAll('.stype-tab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('natGrid').style.display=cat==='nature'?'grid':'none';
+  document.getElementById('musGrid').style.display=cat==='music'?'grid':'none';
+  const infoEl=document.getElementById('musicInfo');
+  if(cat==='music'){
+    // activate first music btn if none active
+    const firstBtn=document.querySelector('#musGrid .sbtn');
+    if(firstBtn&&!document.querySelector('#musGrid .sbtn.on')){
+      firstBtn.classList.add('on');
+      selectedSleep='delta';
+      infoEl.textContent=MUSIC_DESC['delta'];
+      infoEl.style.display='block';
+    }
+  } else {
+    infoEl.style.display='none';
+  }
+  if(isSleeping){ stopSleep(); setTimeout(startSleep,300); }
+}
+
+function selectSleep(type,el){
+  selectedSleep=type;
+  const grid=soundCat==='nature'?'#natGrid':'#musGrid';
+  document.querySelectorAll(grid+' .sbtn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  const infoEl=document.getElementById('musicInfo');
+  if(soundCat==='music'&&MUSIC_DESC[type]){
+    infoEl.textContent=MUSIC_DESC[type]; infoEl.style.display='block';
+  } else { infoEl.style.display='none'; }
+  if(isSleeping){ stopSleep(); setTimeout(startSleep,300); }
+}
+
+function selectWake(type,el){
+  selectedWake=type;
+  document.querySelectorAll('#pWake .card:nth-child(2) .sbtn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+}
+
+/* ===================================================
+   NOISE GENERATORS
+=================================================== */
+function mkNoise(t){
+  const a=AC(),sz=a.sampleRate*3,buf=a.createBuffer(2,sz,a.sampleRate);
+  for(let ch=0;ch<2;ch++){
+    const d=buf.getChannelData(ch);
+    if(t==='white'){ for(let i=0;i<sz;i++) d[i]=Math.random()*2-1; }
+    else if(t==='pink'){
+      let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+      for(let i=0;i<sz;i++){
+        const w=Math.random()*2-1;
+        b0=.99886*b0+w*.0555179;b1=.99332*b1+w*.0750759;
+        b2=.969*b2+w*.153852;b3=.8665*b3+w*.3104856;
+        b4=.55*b4+w*.5329522;b5=-.7616*b5-w*.016898;
+        d[i]=(b0+b1+b2+b3+b4+b5+b6+w*.5362)*.11; b6=w*.115926;
+      }
+    } else { // brown
+      let last=0;
+      for(let i=0;i<sz;i++){
+        const w=Math.random()*2-1;
+        d[i]=(last+.02*w)/1.02; last=d[i]; d[i]*=3.5;
+      }
+    }
+  }
+  const s=a.createBufferSource(); s.buffer=buf; s.loop=true; return s;
+}
+
+function mkLFO(freq,depth,target){
+  const a=AC(),o=a.createOscillator(),g=a.createGain();
+  o.frequency.value=freq; g.gain.value=depth;
+  o.connect(g); g.connect(target); o.start(); return o;
+}
+
+/* ===================================================
+   SLEEP SOUND BUILDER
+   方針：
+   ・ノイズ系 → BufferSource(loop=true) で永続再生
+   ・音楽系メロディ → Web Audio スケジューリングで先読みキュー
+     setTimeout は「次のバッチをキューに積む」目的のみ使い、
+     セッションIDが変わったら即座に停止する
+   ・crystal/zen/lullaby の各ノードはmasterGainに接続したまま
+     masterをフェードアウトするだけで一括停止できる構造にする
+=================================================== */
+
+/* --- バイノーラルビート用：ステレオバッファを正しく生成 --- */
+function mkBinaural(freqL, freqR, durationSec){
+  const a = AC();
+  const sr = a.sampleRate;
+  const len = sr * durationSec;
+  // ステレオ(2ch)バッファ: ch0=Left, ch1=Right
+  const buf = a.createBuffer(2, len, sr);
+  const L = buf.getChannelData(0);
+  const R = buf.getChannelData(1);
+  for(let i=0;i<len;i++){
+    L[i] = Math.sin(2*Math.PI*freqL*i/sr) * 0.35;
+    R[i] = Math.sin(2*Math.PI*freqR*i/sr) * 0.35;
+  }
+  const src = a.createBufferSource();
+  src.buffer = buf; src.loop = true;
+  return src;
+}
+
+/* --- 子守唄: AudioBufferにメロディ全体を焼き付けてloop --- */
+function mkLullabyBuffer(){
+  const a = AC();
+  const sr = a.sampleRate;
+  const scale = [261.63,329.63,392,440,523.25];
+  const melody = [0,2,4,3,2,0,1,3,2,0,4,2,0,4,3,2,1,0,2,4,3,1,0,2];
+  const tempo = 1.1; // 秒/音
+  const totalSec = melody.length * tempo;
+  const len = Math.ceil(sr * totalSec);
+  const buf = a.createBuffer(1, len, sr);
+  const d = buf.getChannelData(0);
+  melody.forEach((noteIdx, ni) => {
+    const freq = scale[noteIdx];
+    const start = Math.floor(ni * tempo * sr);
+    const noteSamples = Math.floor(tempo * sr);
+    const attack = Math.floor(sr * 0.06);
+    const release = Math.floor(sr * tempo * 0.25);
+    for(let s=0;s<noteSamples;s++){
+      let amp = 0.08;
+      if(s < attack) amp *= s/attack;
+      else if(s > noteSamples-release) amp *= (noteSamples-s)/release;
+      d[start+s] = Math.sin(2*Math.PI*freq*s/sr)*amp
+                 + Math.sin(2*Math.PI*freq*2*s/sr)*amp*0.3
+                 + Math.sin(2*Math.PI*freq*3*s/sr)*amp*0.1;
+    }
+  });
+  const src = a.createBufferSource();
+  src.buffer = buf; src.loop = true;
+  return src;
+}
+
+/* --- クリスタルボウル: 減衰波形をバッファに焼いてループ --- */
+function mkCrystalBuffer(freq){
+  const a = AC();
+  const sr = a.sampleRate;
+  const duration = 10; // 1打鍵分の長さ（秒）
+  const buf = a.createBuffer(1, sr*duration, sr);
+  const d = buf.getChannelData(0);
+  // 基音＋2倍音＋3倍音
+  const harmonics = [[1,0.07],[2,0.04],[3,0.02],[4,0.01]];
+  for(let s=0;s<sr*duration;s++){
+    const t = s/sr;
+    const env = Math.exp(-t*0.5); // 自然減衰
+    let v = 0;
+    harmonics.forEach(([h,amp])=>{ v += Math.sin(2*Math.PI*freq*h*t)*amp*env; });
+    d[s] = v;
+  }
+  const src = a.createBufferSource();
+  src.buffer = buf; src.loop = true;
+  return src;
+}
+
+/* --- 禅ティンシャ: ステレオ減衰音をバッファに焼く --- */
+function mkZenBuffer(){
+  const a = AC();
+  const sr = a.sampleRate;
+  const interval = 14; // 打鍵間隔（秒）
+  const decay = 6;
+  const buf = a.createBuffer(1, sr*interval, sr);
+  const d = buf.getChannelData(0);
+  [[2048,0.07],[2051,0.06],[4096,0.03]].forEach(([f,amp])=>{
+    for(let s=0;s<sr*decay;s++){
+      const t=s/sr;
+      d[s] += Math.sin(2*Math.PI*f*t)*amp*Math.exp(-t*1.2);
+    }
+  });
+  const src = a.createBufferSource();
+  src.buffer = buf; src.loop = true;
+  return src;
+}
+
+function buildSleepSound(type){
+  const a = AC();
+  const master = a.createGain();
+  master.gain.setValueAtTime(0, a.currentTime);
+  master.gain.linearRampToValueAtTime(vol, a.currentTime+2.5);
+  master.connect(a.destination);
+  const N = [master];
+
+  /* === 自然音 === */
+  if(type==='rain'){
+    const n=mkNoise('pink'); n.start();
+    const f=a.createBiquadFilter(); f.type='bandpass'; f.frequency.value=600; f.Q.value=.5;
+    n.connect(f); f.connect(master); N.push(n,f);
+    const n2=mkNoise('white'); n2.start();
+    const g2=a.createGain(); g2.gain.value=.07; n2.connect(g2); g2.connect(master); N.push(n2,g2);
+  }
+  else if(type==='ocean'){
+    const n=mkNoise('brown'); n.start();
+    const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=380;
+    n.connect(f); f.connect(master); N.push(n,f);
+    N.push(mkLFO(.12,180,f.frequency));
+    const n2=mkNoise('pink'); n2.start();
+    const g2=a.createGain(); g2.gain.value=.28; n2.connect(g2); g2.connect(master); N.push(n2,g2);
+  }
+  else if(type==='forest'){
+    const n=mkNoise('brown'); n.start();
+    const f=a.createBiquadFilter(); f.type='bandpass'; f.frequency.value=280; f.Q.value=1;
+    n.connect(f); f.connect(master); N.push(n,f);
+    const n2=mkNoise('pink'); n2.start();
+    const f2=a.createBiquadFilter(); f2.type='highpass'; f2.frequency.value=2200;
+    const g2=a.createGain(); g2.gain.value=.07; n2.connect(f2); f2.connect(g2); g2.connect(master); N.push(n2,f2,g2);
+    // 鳥の声：GainノードをN管理下に置き、スケジュールはAudioContextベース
+    for(let i=0;i<3;i++){
+      const o=a.createOscillator(); o.type='sine'; o.frequency.value=2400+Math.random()*900;
+      const env=a.createGain(); env.gain.value=0; o.connect(env); env.connect(master); o.start();
+      N.push(o,env);
+      // 先読みスケジュール（60秒分をキュー）
+      schedBirdAhead(env, a, i*2.0, 60);
+    }
+  }
+  else if(type==='white'){
+    const n=mkNoise('white'); n.start();
+    const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=2800;
+    const g=a.createGain(); g.gain.value=.48; n.connect(f); f.connect(g); g.connect(master); N.push(n,f,g);
+  }
+  else if(type==='river'){
+    const n=mkNoise('pink'); n.start();
+    const f=a.createBiquadFilter(); f.type='bandpass'; f.frequency.value=900; f.Q.value=.8;
+    n.connect(f); f.connect(master); N.push(n,f); N.push(mkLFO(.28,320,f.frequency));
+    const n2=mkNoise('white'); n2.start();
+    const f2=a.createBiquadFilter(); f2.type='highpass'; f2.frequency.value=1600;
+    const g2=a.createGain(); g2.gain.value=.13; n2.connect(f2); f2.connect(g2); g2.connect(master); N.push(n2,f2,g2);
+  }
+  else if(type==='wind'){
+    const n=mkNoise('brown'); n.start();
+    const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=190;
+    n.connect(f); f.connect(master); N.push(n,f); N.push(mkLFO(.07,140,f.frequency));
+    const n2=mkNoise('pink'); n2.start();
+    const g2=a.createGain(); g2.gain.value=.14; n2.connect(g2); g2.connect(master); N.push(n2,g2);
+  }
+
+  /* === 睡眠音楽 === */
+  else if(type==='delta'){
+    // デルタ波バイノーラル：L=100Hz / R=101Hz（差=1Hz=デルタ波）
+    const src = mkBinaural(100, 101, 60);
+    src.connect(master); src.start(); N.push(src);
+    // 低周波ピンクノイズで空間を包む
+    const n=mkNoise('pink'); n.start();
+    const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=280;
+    const g=a.createGain(); g.gain.value=.1; n.connect(f); f.connect(g); g.connect(master); N.push(n,f,g);
+    // 超低音ドローン
+    const drone=a.createOscillator(); drone.type='sine'; drone.frequency.value=55;
+    const dg=a.createGain(); dg.gain.value=.04; drone.connect(dg); dg.connect(master); drone.start(); N.push(drone,dg);
+  }
+  else if(type==='binaural'){
+    // シータ波バイノーラル：L=200Hz / R=206Hz（差=6Hz=シータ波）
+    const src = mkBinaural(200, 206, 60);
+    src.connect(master); src.start(); N.push(src);
+    // アンビエントパッド（持続する倍音）
+    [[130,0.05],[196,0.04],[260,0.03],[390,0.02]].forEach(([freq,amp],i)=>{
+      const o=a.createOscillator(); o.type='sine'; o.frequency.value=freq;
+      const vib=a.createOscillator(); vib.frequency.value=.15+i*.04;
+      const vg=a.createGain(); vg.gain.value=freq*.0015;
+      vib.connect(vg); vg.connect(o.frequency); vib.start();
+      const g=a.createGain(); g.gain.value=0;
+      g.gain.linearRampToValueAtTime(amp,a.currentTime+3+i*.6);
+      o.connect(g); g.connect(master); o.start(); N.push(o,vib,vg,g);
+    });
+    const n=mkNoise('brown'); n.start();
+    const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=200;
+    const gn=a.createGain(); gn.gain.value=.08; n.connect(f); f.connect(gn); gn.connect(master); N.push(n,f,gn);
+  }
+  else if(type==='hz432'){
+    // 432Hz と倍音系列を永続オシレータで
+    [[432,0.06],[288,0.05],[216,0.04],[540,0.03],[648,0.02],[108,0.04]].forEach(([freq,amp],i)=>{
+      const o=a.createOscillator(); o.type='sine'; o.frequency.value=freq;
+      const vib=a.createOscillator(); vib.frequency.value=.12+i*.025;
+      const vg=a.createGain(); vg.gain.value=freq*.002;
+      vib.connect(vg); vg.connect(o.frequency); vib.start();
+      const g=a.createGain(); g.gain.value=0;
+      g.gain.linearRampToValueAtTime(amp, a.currentTime+2+i*.7);
+      o.connect(g); g.connect(master); o.start(); N.push(o,vib,vg,g);
+    });
+    // シマー
+    const n=mkNoise('pink'); n.start();
+    const f=a.createBiquadFilter(); f.type='highshelf'; f.frequency.value=4000; f.gain.value=-14;
+    const gn=a.createGain(); gn.gain.value=.035; n.connect(f); f.connect(gn); gn.connect(master); N.push(n,f,gn);
+  }
+  else if(type==='lullaby'){
+    // メロディをバッファに焼いてloop再生（途切れなし）
+    const src = mkLullabyBuffer();
+    src.connect(master); src.start(); N.push(src);
+    // 低音ドローン
+    const bass=a.createOscillator(); bass.type='sine'; bass.frequency.value=65;
+    const bg=a.createGain(); bg.gain.value=.055; bass.connect(bg); bg.connect(master); bass.start(); N.push(bass,bg);
+    // 和音パッド
+    [[196,0.04],[261,0.035],[330,0.03]].forEach(([freq,amp],i)=>{
+      const o=a.createOscillator(); o.type='sine'; o.frequency.value=freq;
+      const g=a.createGain(); g.gain.value=0;
+      g.gain.linearRampToValueAtTime(amp,a.currentTime+3+i*.5);
+      o.connect(g); g.connect(master); o.start(); N.push(o,g);
+    });
+  }
+  else if(type==='crystal'){
+    // 複数クリスタルボウルをバッファループで永続再生
+    [[256,1.0],[320,1.3],[384,1.6],[480,2.0],[512,2.4]].forEach(([freq,offset])=>{
+      const src = mkCrystalBuffer(freq);
+      // offsetでループの位相をずらし、自然なランダム感を出す
+      const g=a.createGain(); g.gain.value=0;
+      g.gain.linearRampToValueAtTime(0.9, a.currentTime+offset+1);
+      src.connect(g); g.connect(master); src.start(0, offset % src.buffer.duration); N.push(src,g);
+    });
+    // シマー
+    const n=mkNoise('pink'); n.start();
+    const f=a.createBiquadFilter(); f.type='highpass'; f.frequency.value=3500;
+    const gn=a.createGain(); gn.gain.value=.018; n.connect(f); f.connect(gn); gn.connect(master); N.push(n,f,gn);
+  }
+  else if(type==='zen'){
+    // ティンシャをバッファにループ
+    const src = mkZenBuffer();
+    src.connect(master); src.start(); N.push(src);
+    // シンギングボウルドローン（持続）
+    const bowl=a.createOscillator(); bowl.type='sine'; bowl.frequency.value=220;
+    const bvib=a.createOscillator(); bvib.frequency.value=.055;
+    const bvg=a.createGain(); bvg.gain.value=1.0;
+    bvib.connect(bvg); bvg.connect(bowl.frequency); bvib.start();
+    const bg=a.createGain(); bg.gain.value=0;
+    bg.gain.linearRampToValueAtTime(.045,a.currentTime+2);
+    bowl.connect(bg); bg.connect(master); bowl.start(); N.push(bowl,bvib,bvg,bg);
+    // 低音ドローン
+    const sub=a.createOscillator(); sub.type='sine'; sub.frequency.value=110;
+    const sg=a.createGain(); sg.gain.value=0; sg.gain.linearRampToValueAtTime(.035,a.currentTime+3);
+    sub.connect(sg); sg.connect(master); sub.start(); N.push(sub,sg);
+    // ブラウンノイズ床
+    const n=mkNoise('brown'); n.start();
+    const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=150;
+    const gn=a.createGain(); gn.gain.value=.07; n.connect(f); f.connect(gn); gn.connect(master); N.push(n,f,gn);
+  }
+
+  return {master, nodes:N};
+}
+
+/* 鳥の声：AudioContextスケジューリングで先読みキュー（途切れなし）
+   再スケジュールはsetTimeoutで次の60秒分を追加するが、
+   セッションIDが変わったら即停止 */
+function schedBirdAhead(env, a, initialOffset, horizonSec){
+  const sid = sleepSession;
+  let t = a.currentTime + initialOffset;
+  const end = t + horizonSec;
+  while(t < end){
+    const gap = 5 + Math.random()*12;
+    t += gap;
+    // 2連続チャープ
+    env.gain.setValueAtTime(0,t);
+    env.gain.linearRampToValueAtTime(.04,t+.05);
+    env.gain.linearRampToValueAtTime(0,t+.16);
+    env.gain.setValueAtTime(0,t+.22);
+    env.gain.linearRampToValueAtTime(.03,t+.28);
+    env.gain.linearRampToValueAtTime(0,t+.40);
+  }
+  // 次の60秒分を予約
+  const remaining = (t - a.currentTime)*1000 - horizonSec*1000*0.5;
+  setTimeout(()=>{
+    if(sleepSession!==sid) return; // セッション違いなら停止
+    schedBirdAhead(env, a, t - a.currentTime, horizonSec);
+  }, Math.max(remaining, 1000));
+}
+
+/* ===================================================
+   SLEEP CONTROLS
+=================================================== */
+function toggleSleep(){ isSleeping? stopSleep(): startSleep(); }
+
+function startSleep(){
+  sleepSession++; // セッションID更新（古いsetTimeoutコールバックを無効化）
+  const {master,nodes}=buildSleepSound(selectedSleep);
+  sleepNodes=nodes; isSleeping=true;
+  const btn=document.getElementById('sleepBtn');
+  btn.textContent='停止する'; btn.classList.add('stop');
+  document.getElementById('status').textContent='再生中 — おやすみなさい 🌙';
+  const mins=parseInt(document.getElementById('tMin').value)||30;
+  sleepRemaining=mins*60;
+  document.getElementById('cdown').classList.add('show');
+  updCdown();
+  cdownInt=setInterval(()=>{ sleepRemaining--; updCdown(); if(sleepRemaining<=0) stopSleep(); },1000);
+}
+
+function stopSleep(){
+  sleepSession++; // 古いスケジュールコールバックを無効化
+  if(sleepNodes.length){
+    const m=sleepNodes[0];
+    try{ m.gain.linearRampToValueAtTime(0,AC().currentTime+2); } catch(e){}
+    setTimeout(()=>killNodes(sleepNodes),2200);
+    sleepNodes=[];
+  }
+  isSleeping=false; clearInterval(cdownInt);
+  const btn=document.getElementById('sleepBtn');
+  btn.textContent='再生して眠る'; btn.classList.remove('stop');
+  document.getElementById('cdown').classList.remove('show');
+  document.getElementById('status').textContent='停止しました';
+}
+
+function updCdown(){
+  const m=String(Math.floor(sleepRemaining/60)).padStart(2,'0');
+  const s=String(sleepRemaining%60).padStart(2,'0');
+  document.getElementById('cdownNum').textContent=`${m}:${s}`;
+}
+
+/* ===================================================
+   ALARM MANAGEMENT
+=================================================== */
+let alarmIdSeq=0;
+
+function addAlarm(){
+  const timeVal=document.getElementById('newAlarmTime').value;
+  const label=document.getElementById('newAlarmLabel').value.trim();
+  if(!timeVal) return;
+  alarms.push({id:++alarmIdSeq, time:timeVal, label:label||'', enabled:true});
+  renderAlarms();
+  document.getElementById('newAlarmLabel').value='';
+  document.getElementById('status').textContent=`アラーム ${timeVal} を追加しました`;
+}
+
+function removeAlarm(id){
+  alarms=alarms.filter(a=>a.id!==id);
+  renderAlarms();
+}
+
+function toggleAlarmEnabled(id,val){
+  const a=alarms.find(x=>x.id===id); if(a) a.enabled=val;
+  renderAlarms();
+}
+
+function renderAlarms(){
+  const list=document.getElementById('alarmList');
+  if(alarms.length===0){
+    list.innerHTML='<div style="font-size:12px;color:var(--soft);text-align:center;padding:8px">アラームがありません</div>';
+    document.getElementById('nextAlarmBox').style.display='none';
+    return;
+  }
+  // Sort by time string
+  const sorted=[...alarms].sort((a,b)=>a.time.localeCompare(b.time));
+  list.innerHTML=sorted.map(a=>`
+    <div class="alarm-item ${a.enabled?'active-alarm':''}" id="ai-${a.id}">
+      <div style="flex:1">
+        <div class="alarm-time-txt">${a.time}</div>
+        ${a.label?`<div class="alarm-label-txt">${a.label}</div>`:''}
+      </div>
+      <label class="alarm-toggle">
+        <input type="checkbox" ${a.enabled?'checked':''} onchange="toggleAlarmEnabled(${a.id},this.checked)">
+        <span class="atslider"></span>
+      </label>
+      <button class="alarm-del" onclick="removeAlarm(${a.id})">✕</button>
+    </div>
+  `).join('');
+  updateNextAlarm();
+}
+
+function updateNextAlarm(){
+  const now=new Date();
+  const active=alarms.filter(a=>a.enabled);
+  if(active.length===0){ document.getElementById('nextAlarmBox').style.display='none'; return; }
+  let nearest=null, nearestDiff=Infinity;
+  active.forEach(a=>{
+    const [h,m]=a.time.split(':').map(Number);
+    let t=new Date(now); t.setHours(h,m,0,0);
+    if(t<=now) t.setDate(t.getDate()+1);
+    const d=t-now;
+    if(d<nearestDiff){ nearestDiff=d; nearest=a; }
+  });
+  if(!nearest){ document.getElementById('nextAlarmBox').style.display='none'; return; }
+  const diff=Math.floor(nearestDiff/1000);
+  const h=String(Math.floor(diff/3600)).padStart(2,'0');
+  const m=String(Math.floor(diff%3600/60)).padStart(2,'0');
+  const s=String(diff%60).padStart(2,'0');
+  document.getElementById('nextAlarmCount').textContent=`${h}:${m}:${s}`;
+  document.getElementById('nextAlarmName').textContent=nearest.label?`「${nearest.label}」 ${nearest.time}`:`${nearest.time}`;
+  document.getElementById('nextAlarmBox').style.display='block';
+}
+
+function checkAlarms(now){
+  const hh=String(now.getHours()).padStart(2,'0');
+  const mm=String(now.getMinutes()).padStart(2,'0');
+  const ss=now.getSeconds();
+  if(ss!==0||alarmPlaying) return;
+  const hit=alarms.find(a=>a.enabled&&a.time===hh+':'+mm);
+  if(hit) triggerAlarm(hit);
+}
+
+function triggerAlarm(alarm){
+  alarmPlaying=true;
+  document.body.classList.add('dawn');
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('overlayMsg').textContent='おはようございます 🌅';
+  document.getElementById('overlayLabel').textContent=alarm.label?`「${alarm.label}」のアラーム`:``;
+  const {nodes}=buildAlarmSound(selectedWake);
+  alarmNodes=nodes;
+  stopSleep();
+}
+
+function stopAlarm(){
+  alarmPlaying=false;
+  document.getElementById('overlay').classList.remove('show');
+  killNodes(alarmNodes); alarmNodes=[];
+  document.getElementById('status').textContent='おはようございます！良い一日を ☀️';
+  document.getElementById('status').classList.add('glow');
+  setTimeout(()=>document.getElementById('status').classList.remove('glow'),6000);
+}
+
+/* ===================================================
+   ALARM SOUND BUILDER
+=================================================== */
+function buildAlarmSound(type){
+  const a=AC();
+  const master=a.createGain();
+  master.gain.setValueAtTime(0,a.currentTime);
+  master.gain.linearRampToValueAtTime(vol,a.currentTime+3);
+  master.connect(a.destination);
+  const N=[master];
+
+  if(type==='birds'){
+    for(let i=0;i<4;i++){
+      const o=a.createOscillator(); o.type='sine'; o.frequency.value=1800+i*320;
+      const env=a.createGain(); env.gain.value=0;
+      o.connect(env); env.connect(master); o.start(); N.push(o,env);
+      schedBirdAlarm(env,a,i*.25);
+    }
+  } else if(type==='chime'){
+    schedChimes(master,a); 
+  } else if(type==='bell'){
+    schedBells(master,a);
+  } else if(type==='energize'){
+    schedEnergize(master,a);
+  }
+  return {master,nodes:N};
+}
+
+function schedBirdAlarm(env,a,offset){
+  function chirp(t){ env.gain.setValueAtTime(0,t); env.gain.linearRampToValueAtTime(.08,t+.04); env.gain.linearRampToValueAtTime(0,t+.13); setTimeout(()=>chirp(a.currentTime+.4+Math.random()*.7),500); }
+  setTimeout(()=>chirp(a.currentTime),offset*1000);
+}
+function schedChimes(dest,a){
+  const fr=[523,659,784,1047];
+  function play(){ fr.forEach((f,i)=>setTimeout(()=>{ const o=a.createOscillator(); o.type='sine'; o.frequency.value=f; const env=a.createGain(); env.gain.value=0; o.connect(env); env.connect(dest); const t=a.currentTime; env.gain.setValueAtTime(.1,t); env.gain.exponentialRampToValueAtTime(.001,t+1.8); o.start(t); o.stop(t+1.8); },i*320)); setTimeout(play,3200); }
+  play();
+}
+function schedBells(dest,a){
+  function ring(){ const o=a.createOscillator(); o.type='sine'; o.frequency.value=440; const env=a.createGain(); env.gain.value=0; o.connect(env); env.connect(dest); const t=a.currentTime; env.gain.setValueAtTime(.13,t); env.gain.exponentialRampToValueAtTime(.001,t+2.2); o.start(t); o.stop(t+2.2); setTimeout(ring,2600); }
+  ring();
+}
+function schedEnergize(dest,a){
+  const pat=[392,440,494,523,587,659,698,784]; let idx=0;
+  function note(){ const o=a.createOscillator(); o.type='square'; o.frequency.value=pat[idx%pat.length]; const g=a.createGain(); g.gain.value=.055; o.connect(g); g.connect(dest); o.start(); o.stop(a.currentTime+.2); idx++; setTimeout(note,idx<4?220:(idx%8===0?650:220)); }
+  note();
+}
+
+/* ===================================================
+   UTILS
+=================================================== */
+function killNodes(ns){
+  ns.forEach(n=>{ try{ if(n.stop) n.stop(); if(n.disconnect) n.disconnect(); } catch(e){} });
+}
+function setVol(v){
+  vol=v/100;
+  if(sleepNodes.length) try{ sleepNodes[0].gain.setValueAtTime(vol,AC().currentTime); }catch(e){}
+  if(alarmNodes.length) try{ alarmNodes[0].gain.setValueAtTime(vol,AC().currentTime); }catch(e){}
+}
+
+/* ===================================================
+   PWA: Service Worker 登録
+=================================================== */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', async ()=>{
+    try{
+      await navigator.serviceWorker.register('sw.js');
+    } catch(e){ console.warn('SW registration failed:', e); }
+  });
+}
+
+/* ===================================================
+   通知権限 & SW連携
+=================================================== */
+async function requestNotifPerm(){
+  if(!('Notification' in window)) return false;
+  if(Notification.permission==='granted') return true;
+  const r = await Notification.requestPermission();
+  return r==='granted';
+}
+
+async function syncAlarmsToSW(){
+  if(!('serviceWorker' in navigator)) return;
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    if(!reg.active) return;
+    const active = alarms.filter(a=>a.enabled).map(a=>({id:a.id,time:a.time,label:a.label}));
+    reg.active.postMessage({type:'SET_ALARMS', alarms:active});
+  } catch(e){}
+}
+
+// SWからの起床通知受信（バックグラウンド復帰時）
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('message', e=>{
+    if(e.data?.type==='ALARM_TRIGGER'){
+      const alarm = alarms.find(a=>a.id===e.data.id);
+      if(alarm && alarm.enabled) triggerAlarm(alarm);
+    }
+  });
+}
+
+// addAlarm / removeAlarm / toggleAlarmEnabled をラップしてSW同期
+const _origAdd = addAlarm;
+addAlarm = async function(){
+  _origAdd();
+  await requestNotifPerm();
+  syncAlarmsToSW();
+};
+const _origRemove = removeAlarm;
+removeAlarm = function(id){ _origRemove(id); syncAlarmsToSW(); };
+const _origToggle = toggleAlarmEnabled;
+toggleAlarmEnabled = function(id,val){ _origToggle(id,val); syncAlarmsToSW(); };
+
+</script>
+</body>
+</html>
