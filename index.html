@@ -202,8 +202,13 @@ body.dawn .btn-main{background:linear-gradient(135deg,#a04010,var(--wake))}
 /* Alarm overlay */
 .overlay{display:none;position:fixed;inset:0;background:rgba(255,100,10,.12);z-index:100;
   flex-direction:column;align-items:center;justify-content:center;gap:20px;
-  backdrop-filter:blur(6px)}
+  backdrop-filter:blur(6px);transition:background .3s}
 .overlay.show{display:flex}
+.overlay.emergency{animation:emergency-flash .5s ease-in-out infinite}
+@keyframes emergency-flash{
+  0%,100%{background:rgba(200,0,0,.18)}
+  50%{background:rgba(255,0,0,.38)}
+}
 .overlay-msg{font-size:24px;letter-spacing:.1em;text-align:center;
   animation:blink .8s ease-in-out infinite;color:var(--sun)}
 .btn-stop{padding:16px 44px;border-radius:50px;border:2px solid var(--sun);
@@ -323,11 +328,27 @@ body.dawn .btn-main{background:linear-gradient(135deg,#a04010,var(--wake))}
     <!-- Wake sound -->
     <div class="card">
       <div class="clabel">起床音</div>
-      <div class="sgrid">
+      <div class="sgrid" id="wakeSoundGrid">
         <button class="sbtn on" onclick="selectWake('birds',this)"><span class="sico">🐦</span>小鳥</button>
         <button class="sbtn" onclick="selectWake('chime',this)"><span class="sico">🔔</span>チャイム</button>
         <button class="sbtn" onclick="selectWake('bell',this)"><span class="sico">🎵</span>ベル</button>
         <button class="sbtn" onclick="selectWake('energize',this)"><span class="sico">⚡</span>元気な音</button>
+        <button class="sbtn" onclick="selectWake('siren',this)"><span class="sico">🚨</span>サイレン</button>
+        <button class="sbtn" onclick="selectWake('panic',this)"><span class="sico">💥</span>緊急警報</button>
+      </div>
+      <div id="wakeDesc" style="font-size:11px;color:var(--soft);margin-top:10px;line-height:1.7;border-top:1px solid var(--border);padding-top:10px;display:none"></div>
+    </div>
+
+    <!-- Wake volume -->
+    <div class="card">
+      <div class="clabel">目覚まし音量 <span id="wakeVolPct" style="color:var(--wake)">70%</span></div>
+      <div class="vrow">
+        <span class="vico">🔈</span>
+        <input type="range" min="0" max="100" value="70" id="wakeVolSlider" oninput="setWakeVol(this.value)">
+        <span class="vico">📢</span>
+      </div>
+      <div style="font-size:10px;color:var(--soft);margin-top:8px;letter-spacing:.05em">
+        ※ 鳴り始めは小音量から段階的に最大まで上がります
       </div>
     </div>
 
@@ -361,7 +382,16 @@ let ctx = null;
 let sleepNodes = [], isSleeping = false;
 let sleepSession = 0; // セッションID — 停止判定に使用（setTimeout競合を防ぐ）
 let sleepTimer = null, sleepRemaining = 0, cdownInt = null;
-let selectedSleep = 'rain', selectedWake = 'birds', vol = 0.45;
+let selectedSleep = 'rain', selectedWake = 'birds', vol = 0.45, wakeVol = 0.70;
+
+const WAKE_DESC = {
+  birds:    '',
+  chime:    '',
+  bell:     '',
+  energize: '徐々に加速するビートで体を目覚めへ引っ張ります。',
+  siren:    '救急車・消防車のサイレン風。確実に意識を引き戻します。',
+  panic:    '不規則な緊急警報音＋低音爆発。これで起きられなければ諦めてください。',
+};
 let soundCat = 'nature';
 let alarms = []; // {id, time, label, enabled}
 let alarmCheckInt = null, alarmPlaying = false, alarmNodes = [];
@@ -416,9 +446,9 @@ function switchTab(tab,el){
    SOUND CATEGORY
 =================================================== */
 const MUSIC_DESC={
-  delta:'デルタ波（0.5–2 Hz）のバイノーラルビートで深いノンレム睡眠を誘導します。ヘッドフォン推奨。',
-  binaural:'左右の耳に微妙に異なる周波数を流し、脳波をシータ波（4–8 Hz）に同調させる睡眠音楽です。',
-  hz432:'432Hzは細胞共鳴・自律神経の安定に効果があるとされる周波数。アンビエントパッドが奏でます。',
+  delta:'デルタ波（1Hz）の振幅変調でスピーカーでも深いノンレム睡眠を誘導します。イヤホン不要。',
+  binaural:'シータ波（6Hz）の振幅変調で入眠のまどろみ状態へ誘います。スピーカーで十分効果的です。',
+  hz432:'432Hzは自律神経の安定に効果があるとされる周波数。アンビエントパッドが奏でます。',
   lullaby:'ゆったりとしたメロディラインが入眠を促す子守唄風のアンビエント音楽です。',
   crystal:'クリスタルボウルの倍音で空間を満たし、思考を手放して眠りへ誘います。',
   zen:'ティンシャとシンギングボウルの余韻が意識をやわらかく溶かす禅の音空間です。',
@@ -460,8 +490,17 @@ function selectSleep(type,el){
 
 function selectWake(type,el){
   selectedWake=type;
-  document.querySelectorAll('#pWake .card:nth-child(2) .sbtn').forEach(b=>b.classList.remove('on'));
+  document.querySelectorAll('#pWake #wakeSoundGrid .sbtn').forEach(b=>b.classList.remove('on'));
   el.classList.add('on');
+  const desc = WAKE_DESC[type]||'';
+  const el2 = document.getElementById('wakeDesc');
+  el2.textContent = desc; el2.style.display = desc ? 'block' : 'none';
+}
+
+function setWakeVol(v){
+  wakeVol = v/100;
+  document.getElementById('wakeVolPct').textContent = v+'%';
+  if(alarmNodes.length) try{ alarmNodes[0].gain.setValueAtTime(wakeVol,AC().currentTime); }catch(e){}
 }
 
 /* ===================================================
@@ -509,22 +548,27 @@ function mkLFO(freq,depth,target){
      masterをフェードアウトするだけで一括停止できる構造にする
 =================================================== */
 
-/* --- バイノーラルビート用：ステレオバッファを正しく生成 --- */
-function mkBinaural(freqL, freqR, durationSec){
+/* --- バイノーラル互換：振幅変調（AM）方式 ---
+   イヤホン不要。キャリアをビート周波数で振幅変調し
+   スピーカーでも脳波同調に近い効果を得る */
+function mkBinauralAM(carrierFreq, beatFreq){
   const a = AC();
-  const sr = a.sampleRate;
-  const len = sr * durationSec;
-  // ステレオ(2ch)バッファ: ch0=Left, ch1=Right
-  const buf = a.createBuffer(2, len, sr);
-  const L = buf.getChannelData(0);
-  const R = buf.getChannelData(1);
-  for(let i=0;i<len;i++){
-    L[i] = Math.sin(2*Math.PI*freqL*i/sr) * 0.35;
-    R[i] = Math.sin(2*Math.PI*freqR*i/sr) * 0.35;
-  }
-  const src = a.createBufferSource();
-  src.buffer = buf; src.loop = true;
-  return src;
+  const carrier = a.createOscillator();
+  carrier.type = 'sine';
+  carrier.frequency.value = carrierFreq;
+  const lfo = a.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = beatFreq;
+  const lfoGain = a.createGain();
+  lfoGain.gain.value = 0.45;
+  const amGain = a.createGain();
+  amGain.gain.value = 0.55;
+  lfo.connect(lfoGain);
+  lfoGain.connect(amGain.gain);
+  lfo.start();
+  carrier.connect(amGain);
+  carrier.start();
+  return { nodes:[carrier, lfo, lfoGain, amGain], out:amGain };
 }
 
 /* --- 子守唄: AudioBufferにメロディ全体を焼き付けてloop --- */
@@ -661,38 +705,39 @@ function buildSleepSound(type){
 
   /* === 睡眠音楽 === */
   else if(type==='delta'){
-    // デルタ波バイノーラル：L=100Hz / R=101Hz（差=1Hz=デルタ波）
-    const src = mkBinaural(100, 101, 60);
-    src.connect(master); src.start(); N.push(src);
-    // 低周波ピンクノイズで空間を包む
+    // デルタ波AM：キャリア100Hz、変調1Hz（スピーカー対応）
+    const am = mkBinauralAM(100, 1.0);
+    const g = a.createGain(); g.gain.value = 0.38;
+    am.out.connect(g); g.connect(master); N.push(...am.nodes, g);
+    // 低音ドローン補強
+    const drone = a.createOscillator(); drone.type='sine'; drone.frequency.value=55;
+    const dg = a.createGain(); dg.gain.value=0.12; drone.connect(dg); dg.connect(master); drone.start(); N.push(drone,dg);
+    // ピンクノイズ床（音量アップ）
     const n=mkNoise('pink'); n.start();
-    const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=280;
-    const g=a.createGain(); g.gain.value=.1; n.connect(f); f.connect(g); g.connect(master); N.push(n,f,g);
-    // 超低音ドローン
-    const drone=a.createOscillator(); drone.type='sine'; drone.frequency.value=55;
-    const dg=a.createGain(); dg.gain.value=.04; drone.connect(dg); dg.connect(master); drone.start(); N.push(drone,dg);
+    const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=350;
+    const gn=a.createGain(); gn.gain.value=.18; n.connect(f); f.connect(gn); gn.connect(master); N.push(n,f,gn);
   }
   else if(type==='binaural'){
-    // シータ波バイノーラル：L=200Hz / R=206Hz（差=6Hz=シータ波）
-    const src = mkBinaural(200, 206, 60);
-    src.connect(master); src.start(); N.push(src);
-    // アンビエントパッド（持続する倍音）
-    [[130,0.05],[196,0.04],[260,0.03],[390,0.02]].forEach(([freq,amp],i)=>{
+    // シータ波AM：キャリア200Hz、変調6Hz（スピーカー対応）
+    const am = mkBinauralAM(200, 6.0);
+    const g = a.createGain(); g.gain.value = 0.32;
+    am.out.connect(g); g.connect(master); N.push(...am.nodes, g);
+    // アンビエントパッド（音量アップ）
+    [[130,0.10],[196,0.08],[260,0.06],[390,0.04]].forEach(([freq,amp],i)=>{
       const o=a.createOscillator(); o.type='sine'; o.frequency.value=freq;
       const vib=a.createOscillator(); vib.frequency.value=.15+i*.04;
       const vg=a.createGain(); vg.gain.value=freq*.0015;
       vib.connect(vg); vg.connect(o.frequency); vib.start();
-      const g=a.createGain(); g.gain.value=0;
-      g.gain.linearRampToValueAtTime(amp,a.currentTime+3+i*.6);
-      o.connect(g); g.connect(master); o.start(); N.push(o,vib,vg,g);
+      const eg=a.createGain(); eg.gain.value=0;
+      eg.gain.linearRampToValueAtTime(amp,a.currentTime+3+i*.6);
+      o.connect(eg); eg.connect(master); o.start(); N.push(o,vib,vg,eg);
     });
     const n=mkNoise('brown'); n.start();
     const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=200;
-    const gn=a.createGain(); gn.gain.value=.08; n.connect(f); f.connect(gn); gn.connect(master); N.push(n,f,gn);
+    const gn=a.createGain(); gn.gain.value=.15; n.connect(f); f.connect(gn); gn.connect(master); N.push(n,f,gn);
   }
   else if(type==='hz432'){
-    // 432Hz と倍音系列を永続オシレータで
-    [[432,0.06],[288,0.05],[216,0.04],[540,0.03],[648,0.02],[108,0.04]].forEach(([freq,amp],i)=>{
+    [[432,0.12],[288,0.10],[216,0.09],[540,0.07],[648,0.05],[108,0.09]].forEach(([freq,amp],i)=>{
       const o=a.createOscillator(); o.type='sine'; o.frequency.value=freq;
       const vib=a.createOscillator(); vib.frequency.value=.12+i*.025;
       const vg=a.createGain(); vg.gain.value=freq*.002;
@@ -707,14 +752,11 @@ function buildSleepSound(type){
     const gn=a.createGain(); gn.gain.value=.035; n.connect(f); f.connect(gn); gn.connect(master); N.push(n,f,gn);
   }
   else if(type==='lullaby'){
-    // メロディをバッファに焼いてloop再生（途切れなし）
     const src = mkLullabyBuffer();
     src.connect(master); src.start(); N.push(src);
-    // 低音ドローン
     const bass=a.createOscillator(); bass.type='sine'; bass.frequency.value=65;
-    const bg=a.createGain(); bg.gain.value=.055; bass.connect(bg); bg.connect(master); bass.start(); N.push(bass,bg);
-    // 和音パッド
-    [[196,0.04],[261,0.035],[330,0.03]].forEach(([freq,amp],i)=>{
+    const bg=a.createGain(); bg.gain.value=.13; bass.connect(bg); bg.connect(master); bass.start(); N.push(bass,bg);
+    [[196,0.09],[261,0.08],[330,0.07]].forEach(([freq,amp],i)=>{
       const o=a.createOscillator(); o.type='sine'; o.frequency.value=freq;
       const g=a.createGain(); g.gain.value=0;
       g.gain.linearRampToValueAtTime(amp,a.currentTime+3+i*.5);
@@ -722,12 +764,10 @@ function buildSleepSound(type){
     });
   }
   else if(type==='crystal'){
-    // 複数クリスタルボウルをバッファループで永続再生
     [[256,1.0],[320,1.3],[384,1.6],[480,2.0],[512,2.4]].forEach(([freq,offset])=>{
       const src = mkCrystalBuffer(freq);
-      // offsetでループの位相をずらし、自然なランダム感を出す
       const g=a.createGain(); g.gain.value=0;
-      g.gain.linearRampToValueAtTime(0.9, a.currentTime+offset+1);
+      g.gain.linearRampToValueAtTime(1.6, a.currentTime+offset+1);
       src.connect(g); g.connect(master); src.start(0, offset % src.buffer.duration); N.push(src,g);
     });
     // シマー
@@ -736,25 +776,21 @@ function buildSleepSound(type){
     const gn=a.createGain(); gn.gain.value=.018; n.connect(f); f.connect(gn); gn.connect(master); N.push(n,f,gn);
   }
   else if(type==='zen'){
-    // ティンシャをバッファにループ
     const src = mkZenBuffer();
     src.connect(master); src.start(); N.push(src);
-    // シンギングボウルドローン（持続）
     const bowl=a.createOscillator(); bowl.type='sine'; bowl.frequency.value=220;
     const bvib=a.createOscillator(); bvib.frequency.value=.055;
     const bvg=a.createGain(); bvg.gain.value=1.0;
     bvib.connect(bvg); bvg.connect(bowl.frequency); bvib.start();
     const bg=a.createGain(); bg.gain.value=0;
-    bg.gain.linearRampToValueAtTime(.045,a.currentTime+2);
+    bg.gain.linearRampToValueAtTime(.12,a.currentTime+2);
     bowl.connect(bg); bg.connect(master); bowl.start(); N.push(bowl,bvib,bvg,bg);
-    // 低音ドローン
     const sub=a.createOscillator(); sub.type='sine'; sub.frequency.value=110;
-    const sg=a.createGain(); sg.gain.value=0; sg.gain.linearRampToValueAtTime(.035,a.currentTime+3);
+    const sg=a.createGain(); sg.gain.value=0; sg.gain.linearRampToValueAtTime(.09,a.currentTime+3);
     sub.connect(sg); sg.connect(master); sub.start(); N.push(sub,sg);
-    // ブラウンノイズ床
     const n=mkNoise('brown'); n.start();
     const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=150;
-    const gn=a.createGain(); gn.gain.value=.07; n.connect(f); f.connect(gn); gn.connect(master); N.push(n,f,gn);
+    const gn=a.createGain(); gn.gain.value=.14; n.connect(f); f.connect(gn); gn.connect(master); N.push(n,f,gn);
   }
 
   return {master, nodes:N};
@@ -910,8 +946,13 @@ function checkAlarms(now){
 function triggerAlarm(alarm){
   alarmPlaying=true;
   document.body.classList.add('dawn');
-  document.getElementById('overlay').classList.add('show');
-  document.getElementById('overlayMsg').textContent='おはようございます 🌅';
+  const overlay=document.getElementById('overlay');
+  overlay.classList.add('show');
+  // 緊急系サウンドは赤点滅オーバーレイ
+  if(selectedWake==='siren'||selectedWake==='panic'){
+    overlay.classList.add('emergency');
+  }
+  document.getElementById('overlayMsg').textContent='起きてください！';
   document.getElementById('overlayLabel').textContent=alarm.label?`「${alarm.label}」のアラーム`:``;
   const {nodes}=buildAlarmSound(selectedWake);
   alarmNodes=nodes;
@@ -919,8 +960,11 @@ function triggerAlarm(alarm){
 }
 
 function stopAlarm(){
+  alarmSid++;          // 全setTimeoutコールバックを無効化
   alarmPlaying=false;
+  clearInterval(alarmVolRampInt); alarmVolRampInt=null;
   document.getElementById('overlay').classList.remove('show');
+  document.getElementById('overlay').className='overlay';
   killNodes(alarmNodes); alarmNodes=[];
   document.getElementById('status').textContent='おはようございます！良い一日を ☀️';
   document.getElementById('status').classList.add('glow');
@@ -929,14 +973,20 @@ function stopAlarm(){
 
 /* ===================================================
    ALARM SOUND BUILDER
+   ・鳴り始め10%→30秒で設定音量MAX（段階的増加）
+   ・alarmVolRampInt でインターバル管理
 =================================================== */
+let alarmVolRampInt = null;
+
 function buildAlarmSound(type){
-  const a=AC();
-  const master=a.createGain();
-  master.gain.setValueAtTime(0,a.currentTime);
-  master.gain.linearRampToValueAtTime(vol,a.currentTime+3);
+  alarmSid++; // 新しいアラームセッション開始
+  const a = AC();
+  const master = a.createGain();
+  // 段階的音量：0 → wakeVol を30秒かけてランプ
+  master.gain.setValueAtTime(wakeVol * 0.08, a.currentTime);
+  master.gain.linearRampToValueAtTime(wakeVol, a.currentTime + 30);
   master.connect(a.destination);
-  const N=[master];
+  const N = [master];
 
   if(type==='birds'){
     for(let i=0;i<4;i++){
@@ -945,32 +995,159 @@ function buildAlarmSound(type){
       o.connect(env); env.connect(master); o.start(); N.push(o,env);
       schedBirdAlarm(env,a,i*.25);
     }
-  } else if(type==='chime'){
-    schedChimes(master,a); 
-  } else if(type==='bell'){
-    schedBells(master,a);
-  } else if(type==='energize'){
-    schedEnergize(master,a);
   }
-  return {master,nodes:N};
+  else if(type==='chime'){ schedChimes(master,a); }
+  else if(type==='bell'){  schedBells(master,a); }
+  else if(type==='energize'){ schedEnergize(master,a); }
+  else if(type==='siren'){   schedSiren(master,a,N); }
+  else if(type==='panic'){   schedPanic(master,a,N); }
+
+  return {master, nodes:N};
 }
 
+/* ---- サイレン：救急車のウーウー ---- */
+function schedSiren(dest, a, N){
+  const osc = a.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.value = 800;
+  // 周波数LFO（650Hz↔950Hz を1秒周期）
+  const lfo = a.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 0.9;
+  const lfoG = a.createGain();
+  lfoG.gain.value = 150; // 周波数幅
+  lfo.connect(lfoG); lfoG.connect(osc.frequency);
+  // ハードな音にするためディストーション的にwaveshaper
+  const ws = a.createWaveShaper();
+  ws.curve = makeDistCurve(60);
+  ws.oversample = '2x';
+  // フィルタで高音を整える
+  const filt = a.createBiquadFilter();
+  filt.type = 'bandpass'; filt.frequency.value = 900; filt.Q.value = 1.5;
+  const g = a.createGain(); g.gain.value = 0.7;
+  osc.connect(ws); ws.connect(filt); filt.connect(g); g.connect(dest);
+  lfo.start(); osc.start();
+  N.push(osc, lfo, lfoG, ws, filt, g);
+  // 第2サイレン音（少し位相ずらし）
+  const osc2 = a.createOscillator(); osc2.type='sawtooth'; osc2.frequency.value=810;
+  const lfo2=a.createOscillator(); lfo2.type='sine'; lfo2.frequency.value=0.85;
+  const lfoG2=a.createGain(); lfoG2.gain.value=140;
+  lfo2.connect(lfoG2); lfoG2.connect(osc2.frequency);
+  const g2=a.createGain(); g2.gain.value=0.4;
+  osc2.connect(g2); g2.connect(dest);
+  lfo2.start(a.currentTime+0.5); osc2.start(a.currentTime+0.5);
+  N.push(osc2,lfo2,lfoG2,g2);
+}
+
+/* ---- 緊急警報：不規則パルス＋低音爆発 ---- */
+function schedPanic(dest, a, N){
+  const sid = alarmSid;
+  const pulseFreqs = [1200, 1400, 900, 1600, 800, 1100];
+  let pulseIdx = 0;
+  function firePulse(){
+    if(alarmSid!==sid) return;
+    const freq = pulseFreqs[pulseIdx % pulseFreqs.length];
+    const osc = a.createOscillator(); osc.type='square'; osc.frequency.value=freq;
+    const env = a.createGain(); env.gain.value=0;
+    osc.connect(env); env.connect(dest);
+    const t = a.currentTime;
+    const dur = 0.06 + Math.random()*0.08;
+    env.gain.setValueAtTime(0.8,t);
+    env.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    osc.start(t); osc.stop(t+dur+0.01);
+    pulseIdx++;
+    const nextGap = pulseIdx%5===0 ? 400+Math.random()*300 : 80+Math.random()*120;
+    setTimeout(firePulse, nextGap);
+  }
+  firePulse();
+
+  function fireBoom(){
+    if(alarmSid!==sid) return;
+    const osc=a.createOscillator(); osc.type='sine'; osc.frequency.value=60;
+    const env=a.createGain(); env.gain.value=0;
+    osc.connect(env); env.connect(dest);
+    const t=a.currentTime;
+    env.gain.setValueAtTime(1.0,t);
+    env.gain.exponentialRampToValueAtTime(0.001,t+0.5);
+    osc.frequency.exponentialRampToValueAtTime(20,t+0.5);
+    osc.start(t); osc.stop(t+0.6);
+    setTimeout(fireBoom, 800+Math.random()*600);
+  }
+  setTimeout(fireBoom, 200);
+
+  function fireNoise(){
+    if(alarmSid!==sid) return;
+    const n=mkNoise('white'); n.start();
+    const env=a.createGain(); env.gain.value=0;
+    const f=a.createBiquadFilter(); f.type='bandpass'; f.frequency.value=2000; f.Q.value=2;
+    n.connect(f); f.connect(env); env.connect(dest);
+    const t=a.currentTime;
+    env.gain.setValueAtTime(0.3,t); env.gain.exponentialRampToValueAtTime(0.001,t+0.15);
+    setTimeout(()=>{ try{n.stop();n.disconnect();}catch(e){} },200);
+    setTimeout(fireNoise, 300+Math.random()*400);
+  }
+  setTimeout(fireNoise,100);
+}
+
+/* ---- ディストーション曲線 ---- */
+function makeDistCurve(amount){
+  const n=256, curve=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const x=i*2/n-1;
+    curve[i]=((Math.PI+amount)*x)/(Math.PI+amount*Math.abs(x));
+  }
+  return curve;
+}
+
+/* ---- アラームセッションID（stopAlarmで更新→古いsetTimeoutを無効化） ---- */
+let alarmSid = 0;
+
 function schedBirdAlarm(env,a,offset){
-  function chirp(t){ env.gain.setValueAtTime(0,t); env.gain.linearRampToValueAtTime(.08,t+.04); env.gain.linearRampToValueAtTime(0,t+.13); setTimeout(()=>chirp(a.currentTime+.4+Math.random()*.7),500); }
+  const sid=alarmSid;
+  function chirp(t){
+    if(alarmSid!==sid) return;
+    env.gain.setValueAtTime(0,t); env.gain.linearRampToValueAtTime(.08,t+.04); env.gain.linearRampToValueAtTime(0,t+.13);
+    setTimeout(()=>chirp(a.currentTime+.4+Math.random()*.7),500);
+  }
   setTimeout(()=>chirp(a.currentTime),offset*1000);
 }
 function schedChimes(dest,a){
+  const sid=alarmSid;
   const fr=[523,659,784,1047];
-  function play(){ fr.forEach((f,i)=>setTimeout(()=>{ const o=a.createOscillator(); o.type='sine'; o.frequency.value=f; const env=a.createGain(); env.gain.value=0; o.connect(env); env.connect(dest); const t=a.currentTime; env.gain.setValueAtTime(.1,t); env.gain.exponentialRampToValueAtTime(.001,t+1.8); o.start(t); o.stop(t+1.8); },i*320)); setTimeout(play,3200); }
+  function play(){
+    if(alarmSid!==sid) return;
+    fr.forEach((f,i)=>setTimeout(()=>{
+      if(alarmSid!==sid) return;
+      const o=a.createOscillator(); o.type='sine'; o.frequency.value=f;
+      const env=a.createGain(); env.gain.value=0; o.connect(env); env.connect(dest);
+      const t=a.currentTime; env.gain.setValueAtTime(.1,t); env.gain.exponentialRampToValueAtTime(.001,t+1.8);
+      o.start(t); o.stop(t+1.8);
+    },i*320));
+    setTimeout(play,3200);
+  }
   play();
 }
 function schedBells(dest,a){
-  function ring(){ const o=a.createOscillator(); o.type='sine'; o.frequency.value=440; const env=a.createGain(); env.gain.value=0; o.connect(env); env.connect(dest); const t=a.currentTime; env.gain.setValueAtTime(.13,t); env.gain.exponentialRampToValueAtTime(.001,t+2.2); o.start(t); o.stop(t+2.2); setTimeout(ring,2600); }
+  const sid=alarmSid;
+  function ring(){
+    if(alarmSid!==sid) return;
+    const o=a.createOscillator(); o.type='sine'; o.frequency.value=440;
+    const env=a.createGain(); env.gain.value=0; o.connect(env); env.connect(dest);
+    const t=a.currentTime; env.gain.setValueAtTime(.13,t); env.gain.exponentialRampToValueAtTime(.001,t+2.2);
+    o.start(t); o.stop(t+2.2); setTimeout(ring,2600);
+  }
   ring();
 }
 function schedEnergize(dest,a){
+  const sid=alarmSid;
   const pat=[392,440,494,523,587,659,698,784]; let idx=0;
-  function note(){ const o=a.createOscillator(); o.type='square'; o.frequency.value=pat[idx%pat.length]; const g=a.createGain(); g.gain.value=.055; o.connect(g); g.connect(dest); o.start(); o.stop(a.currentTime+.2); idx++; setTimeout(note,idx<4?220:(idx%8===0?650:220)); }
+  function note(){
+    if(alarmSid!==sid) return;
+    const o=a.createOscillator(); o.type='square'; o.frequency.value=pat[idx%pat.length];
+    const g=a.createGain(); g.gain.value=.055; o.connect(g); g.connect(dest);
+    o.start(); o.stop(a.currentTime+.2); idx++;
+    setTimeout(note,idx<4?220:(idx%8===0?650:220));
+  }
   note();
 }
 
